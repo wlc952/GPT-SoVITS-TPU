@@ -1,3 +1,4 @@
+import torch
 from torch.nn.functional import *
 from torch.nn.functional import (
     _mha_shape_check,
@@ -37,7 +38,7 @@ def multi_head_attention_forward_patched(
 
     # set up shape vars
     _, _, embed_dim = query.shape
-    attn_mask = _canonical_mask(
+    attn_mask = canonical_mask(
         mask=attn_mask,
         mask_name="attn_mask",
         other_type=None,
@@ -51,17 +52,18 @@ def multi_head_attention_forward_patched(
     proj_qkv = proj_qkv.unflatten(-1, (3, query.size(-1))).unsqueeze(0).transpose(0, -2).squeeze(-2).contiguous()
     q, k, v = proj_qkv[0], proj_qkv[1], proj_qkv[2]
 
-    if cache["first_infer"] == 1:
-        cache["k"][cache["stage"]] = k
-        cache["v"][cache["stage"]] = v
-    else:
-        cache["k"][cache["stage"]] = torch.cat([cache["k"][cache["stage"]][:-1], k], 0)
-        cache["v"][cache["stage"]] = torch.cat([cache["v"][cache["stage"]][:-1], v], 0)
-        k = cache["k"][cache["stage"]]
-        v = cache["v"][cache["stage"]]
-    cache["stage"] = (cache["stage"] + 1) % cache["all_stage"]
+    if cache != None:
+        if cache["first_infer"] == 1:
+            cache["k"][cache["stage"]] = k
+            cache["v"][cache["stage"]] = v
+        else:
+            cache["k"][cache["stage"]] = torch.cat([cache["k"][cache["stage"]][:-1], k], 0)
+            cache["v"][cache["stage"]] = torch.cat([cache["v"][cache["stage"]][:-1], v], 0)
+            k = cache["k"][cache["stage"]]
+            v = cache["v"][cache["stage"]]
+        cache["stage"] = (cache["stage"] + 1) % cache["all_stage"]
 
-    attn_mask = _canonical_mask(
+    attn_mask = canonical_mask(
         mask=attn_mask,
         mask_name="attn_mask",
         other_type=None,
@@ -83,6 +85,8 @@ def multi_head_attention_forward_patched(
     attn_output = scaled_dot_product_attention(
         q, k, v, attn_mask, dropout_p, is_causal
     )
+        
+    
     attn_output = (
         attn_output.permute(2, 0, 1, 3).contiguous().view(-1, embed_dim)
     )
@@ -90,3 +94,17 @@ def multi_head_attention_forward_patched(
     attn_output = attn_output.view(-1, 1, attn_output.size(1))
 
     return attn_output
+
+def canonical_mask(mask, mask_name,other_type,other_name,target_type,check_other: bool = True):
+    if mask is not None:
+        _mask_dtype = mask.dtype
+        _mask_is_float = torch.is_floating_point(mask)
+        if _mask_dtype != torch.bool and not _mask_is_float:
+            raise AssertionError(
+                f"only bool and floating types of {mask_name} are supported")
+        if not _mask_is_float:
+            mask = (
+                torch.zeros_like(mask, dtype=target_type)
+                .masked_fill_(mask, float("-10000"))
+            )
+    return mask

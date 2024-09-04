@@ -17,7 +17,7 @@ class Text2SemanticLightningModule(LightningModule):
     def __init__(self, config, output_dir, is_train=True):
         super().__init__()
         self.config = config
-        self.top_k = 3
+        self.top_k = 15
         self.model = Text2SemanticDecoder(config=config, top_k=self.top_k)
         pretrained_s1 = config.get("pretrained_s1")
         if pretrained_s1 and is_train:
