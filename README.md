@@ -21,6 +21,7 @@ The models folder structure is as follows:
 |   +--- 07_ar_predict_1684x_f32.bmodel
 |   +--- 08_sample.onnx
 |   +--- 09_vits_decoder_1684x_f32.bmodel
+
 +--- dynamic
 |   +--- 00_cnhubert.onnx
 |   +--- 01_vits_encoder.onnx
@@ -32,21 +33,10 @@ The models folder structure is as follows:
 +--- g2pw_tokenizer
 |   +--- config.json
 |   +--- tokenizer.json
-+--- static
-|   +--- 00_cnhubert.onnx
-|   +--- 01_vits_encoder.onnx
-|   +--- 02_bert.onnx
-|   +--- 03_t2s_encoder.onnx
-|   +--- 04_embedding.onnx
-|   +--- 05_attnmask.onnx
-|   +--- 06_t2s_decoder.onnx
-|   +--- 07_ar_predict.onnx
-|   +--- 08_sample.onnx
-|   +--- 09_vits_decoder.onnx
 ```
 
 ## Inference on TPU
 
 ```bash
-python infer_bmodel.py
+python infer_bmodel_cache.py
 ```
