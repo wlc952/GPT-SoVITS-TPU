@@ -240,8 +240,9 @@ class T2SModel:
         self.sample_layer = ort.InferenceSession(cache_dir + 'sample_layer.onnx')
         self.update_next_step = BModel(cache_dir + 'update_next_step_1684x_f32.bmodel')
         # self.decoder = T2SStage(cache_dir)
-        self.decoder = ort.InferenceSession(cache_dir + 't2s_transformer2.onnx')
-        # self.decoder = BModel(cache_dir + 't2s_transformer_1684x_f32.bmodel')
+        self.decoder = ort.InferenceSession(cache_dir + 't2s_transformer.onnx')
+        # self.decoder = ort.InferenceSession(cache_dir + 't2s_transformer2.onnx')
+
 
 
     def __call__(self, phoneme_ids, bert, prompts):
@@ -263,14 +264,17 @@ class T2SModel:
 
         current_size = 381
         for idx in tqdm(range(1,500)):
+            ########### method 1 : self.decoder use 'models/cache/blocks/*.bmodel' ###############
             # xy_dec, k_cache, v_cache, current_size = self.decoder(xy_pos, k_cache, v_cache, current_size)
 
-            xy_dec, k_cache, v_cache, current_size = self.decoder.run(None, {"xy_pos":xy_pos,"ik":k_cache, "iv":v_cache, "isize":np.int64([current_size])})
+            ########### method 2 : self.decoder use 'models/cache/t2s_transformer.onnx' ###############
+            # xy_dec, k_cache, v_cache, current_size = self.decoder.run(None, {"xy_pos":xy_pos,"ik":k_cache, "iv":v_cache, "isize":np.int64([current_size])})
 
-            # xy_dec, k, v = self.decoder([xy_pos, k_cache, v_cache, np.int32([current_size])])
-            # k_cache[:, :, current_size: current_size+1, :] = k
-            # v_cache[:, :, current_size: current_size+1, :] = v
-            # current_size += 1
+            ########### method 3 : self.decoder use 'models/cache/t2s_transformer2.onnx' ###############
+            xy_dec, k, v = self.decoder.run(None, {"xy_pos":xy_pos,"ik":k_cache, "iv":v_cache, "current_size":np.int64([current_size])})
+            k_cache[:, :, current_size: current_size+1, :] = k
+            v_cache[:, :, current_size: current_size+1, :] = v
+            current_size = current_size + 1
 
             logits = self.ar_predict_layer([xy_dec[:, -1]])[0]
             samples, y = self.sample_layer.run(None, {"logits": logits[0], "y": np.int64(y)})
