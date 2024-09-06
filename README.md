@@ -21,21 +21,47 @@ The models folder structure is as follows:
 |   +--- 07_ar_predict_1684x_f32.bmodel
 |   +--- 08_sample.onnx
 |   +--- 09_vits_decoder_1684x_f32.bmodel
-
-+--- dynamic
-|   +--- 00_cnhubert.onnx
-|   +--- 01_vits_encoder.onnx
-|   +--- 02_bert.onnx
-|   +--- 03_t2s_encoder.onnx
-|   +--- 04_t2s_first_stage_decoder.onnx
-|   +--- 05_t2s_stage_decoder.onnx
-|   +--- 06_vits_decoder.onnx
++--- cache
+|   +--- ar_predict_1684x_f32.bmodel
+|   +--- blocks
+|   |   +--- block_0.bmodel
+|   |   +--- block_1.bmodel
+|   |   +--- block_10.bmodel
+|   |   +--- block_11.bmodel
+|   |   +--- block_12.bmodel
+|   |   +--- block_13.bmodel
+|   |   +--- block_14.bmodel
+|   |   +--- block_15.bmodel
+|   |   +--- block_16.bmodel
+|   |   +--- block_17.bmodel
+|   |   +--- block_18.bmodel
+|   |   +--- block_19.bmodel
+|   |   +--- block_2.bmodel
+|   |   +--- block_20.bmodel
+|   |   +--- block_21.bmodel
+|   |   +--- block_22.bmodel
+|   |   +--- block_23.bmodel
+|   |   +--- block_3.bmodel
+|   |   +--- block_4.bmodel
+|   |   +--- block_5.bmodel
+|   |   +--- block_6.bmodel
+|   |   +--- block_7.bmodel
+|   |   +--- block_8.bmodel
+|   |   +--- block_9.bmodel
+|   +--- embedding_1684x_f32.bmodel
+|   +--- first_stage_decoder_1684x_f32.bmodel
+|   +--- mask.onnx
+|   +--- sample_layer.onnx
+|   +--- t2s_transformer.onnx
+|   +--- update_next_step_1684x_f32.bmodel
 +--- g2pw_tokenizer
 |   +--- config.json
 |   +--- tokenizer.json
 ```
 
 ## Inference on TPU
+
+It takes about 16 seconds to generate a speech of about 30 words.
 
 ```bash
 python infer_bmodel_cache.py
