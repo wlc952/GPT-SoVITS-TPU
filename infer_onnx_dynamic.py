@@ -176,13 +176,14 @@ class T2SModel:
 
         stop = False
         for idx in tqdm(range(1, 300)):
-            y, k, v, y_emb, logits, samples = self.stage_decoder.run(None, {"ix": x, "iy": y, "ik": k, "v": v, "iy_emb": y_emb, "x_example": x_example})
+
+            y, k, v, y_emb, logits, samples = self.stage_decoder.run(None, {"iy": y, "ik": k, "iv": v, "iy_emb": y_emb, "x_example": x_example})
 
             if np.argmax(logits, axis=-1)[0] == 1024 or samples[0, 0] == 1024:
                 stop = True
             if stop: break
 
-        return y[...,-idx:].unsqueeze(0)
+        return y[...,-idx:]
 
 
 class VitsDecoder:
@@ -226,7 +227,7 @@ class GptSovits:
         audio_opt.append(zero_wav)
         audio = (np.concatenate(audio_opt, 0) * 32768).astype(np.int16)
 
-        soundfile.write("out_dynamic.wav", audio, self.hps.sampling_rate)
+        soundfile.write("out_test.wav", audio, self.hps.sampling_rate)
 
         return audio
         
@@ -238,7 +239,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--ssl_path", type=str, default="models/dynamic/00_cnhubert.onnx")
     parser.add_argument("--vits_encoder_path", type=str, default="models/dynamic/01_vits_encoder.onnx")
-    parser.add_argument("--g2pw_path", type=str, default="models/g2pw_tokenizer")
+    parser.add_argument("--g2pw_path", type=str, default="GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large")
     parser.add_argument("--bert_path", type=str, default="models/dynamic/02_bert.onnx")
     parser.add_argument("--t2s_encoder_path", type=str, default="models/dynamic/03_t2s_encoder.onnx")
     parser.add_argument("--t2s_first_stage_decoder", type=str, default="models/dynamic/04_t2s_first_stage_decoder.onnx")
@@ -255,7 +256,7 @@ if __name__ == "__main__":
     gptsovits = GptSovits(args)
     gptsovits(args)
 
-    print("put time : ",time.time() - start)
+    print("put time : ",time.time() - start) # 20s
 
 
 

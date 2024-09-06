@@ -1,5 +1,6 @@
 import os
 import sys
+
 now_dir = os.getcwd()
 sys.path.append(now_dir)
 sys.path.append(now_dir + "/GPT_SoVITS")
@@ -10,8 +11,8 @@ from transformers import AutoTokenizer
 import numpy as np
 import librosa
 import re
-from GPT_SoVITS.text import cleaned_text_to_sequence
-from GPT_SoVITS.text.chinese2 import g2p, text_normalize
+from text import cleaned_text_to_sequence
+from text.chinese2 import g2p, text_normalize
 import time
 import onnxruntime as ort
 
@@ -213,6 +214,14 @@ class T2SModel:
         self.predict = ort.InferenceSession(predict_path)
         self.sample = ort.InferenceSession(sample_path)
 
+    def attention_mask(self, x_attn_mask, x_len, y_len, prefix_len, idx):
+        x_attn_mask_pad = np.pad(x_attn_mask, ((0, 0), (0, y_len)), constant_values=True)
+        y_attn_mask = np.triu(np.ones((prefix_len + idx, prefix_len + idx), dtype=bool), k=1)
+        y_attn_mask = np.pad(y_attn_mask, ((0, 0), (x_len, 0)), constant_values=False)
+        y_attn_mask = np.pad(y_attn_mask, ((0, y_len - prefix_len - idx), (0, y_len - prefix_len - idx)), constant_values=True)
+        xy_attn_mask = np.concatenate([x_attn_mask_pad, y_attn_mask], axis=0)
+        return xy_attn_mask
+
     def __call__(self, phoneme_ids, bert, prompts):
         x = self.encoder.run(None, {"phoneme_ids": phoneme_ids, "bert": bert})[0]
         y = prompts
@@ -222,12 +231,15 @@ class T2SModel:
         y = np.concatenate([y, np.zeros((y.shape[0], LEN_Y - y.shape[1]), dtype=np.int64)], 1)
         y_len = y.shape[1]
         x_len = x.shape[1]
+        x_attn_mask = np.zeros((x_len, x_len), dtype=bool)
 
+        stop = False
         for idx in tqdm(range(300)):
-            xy_pos = self.embedding.run(None, {"y": y, "x": x, "y_len": np.int64([y_len]), "prefix_len": np.int64([prefix_len]), "idx": np.int64([idx])})[0]
-            xy_pos = np.pad(xy_pos, ((0, 0), (0, y_len - idx - prefix_len)), mode='constant', constant_values=0)
+            xy_pos = self.embedding.run(None, {"y": y, "x": x, "prefix_len": np.int64([prefix_len]), "idx": np.int64([idx])})[0]
+            xy_pos = np.pad(xy_pos, ((0, 0), (0, y_len - idx - prefix_len), (0, 0)), mode='constant', constant_values=0)
 
-            xy_attn_mask = self.attnmask.run(None, {"x_len": np.int64([x_len]), "y_len": np.int64([y_len]), "prefix_len": np.int64([prefix_len]), "idx": np.int64([idx])})[0]
+            # xy_attn_mask = self.attnmask.run(None, {"x_len": np.int64([x_len]), "y_len": np.int64([y_len]), "prefix_len": np.int64([prefix_len]), "idx": np.int64([idx])})[0]
+            xy_attn_mask = self.attention_mask(x_attn_mask, x_len, y_len, prefix_len, idx)
             
             xy_dec = self.decoder.run(None, {"xy_pos": xy_pos, "xy_attn_mask": xy_attn_mask})[0]
             logits = self.predict.run(None, {"xy_dec": xy_dec[:, prefix_len + x_len + idx - 1]})[0]
@@ -237,9 +249,6 @@ class T2SModel:
             if prefix_len + idx + 1 >= y_len: break
 
             y[:, idx + prefix_len] = samples
-                        
-            if idx > 10 and (y[0, idx + prefix_len - 5 : idx + prefix_len] == [486] *5).all(): break
-
         print("y:", y)
         return y[:, prefix_len + 1: prefix_len + idx]
 
@@ -248,8 +257,9 @@ class VitsDecoder:
     def __init__(self, vits_decoder_path):
         self.model = ort.InferenceSession(vits_decoder_path)
     
-    def __call__(self, pred_semantic, text_seq, refer, randn):
-        return self.model.run(None, {"pred_semantic": pred_semantic, "text_seq": text_seq, "refer": refer, "randn": randn})[0]
+    def __call__(self, pred_semantic, text_seq, refer):
+        randn_np = np.random.randn(1, 192, 600).astype(np.float32)
+        return self.model.run(None, {"pred_semantic": pred_semantic, "text_seq": text_seq, "refer": refer, "randn": randn_np})[0]
 
 
 class GptSovits:
@@ -276,17 +286,16 @@ class GptSovits:
         pred_semantic = np.expand_dims(pred_semantic, 0)
         phones1 = np.expand_dims(np.int64(phones1), 0)
         refer = get_spepc(self.hps, args.ref_wav_path)
-        randn_np = np.random.randn(1, 192, 600).astype(np.float32)
 
-        audio_np = self.vits_decoder(pred_semantic, phones1, refer, randn_np)
+        print("pred_semantic:", pred_semantic.shape, "phones1:",phones1.shape, "refer:", refer.shape)
+        audio_np = self.vits_decoder(pred_semantic, phones1, refer)
 
         audio_np = audio_np[0,0]
-        audio_np = audio_np[:32000*5]
         max_audio=np.abs(audio_np).max()
         if max_audio>1: audio_np/=max_audio
 
         audio_test = (audio_np * 32768).astype(np.int16)
-        soundfile.write("out_static.wav", audio_test, self.hps.sampling_rate)
+        soundfile.write("out_test.wav", audio_test, self.hps.sampling_rate)
 
         return audio_test
         
@@ -304,7 +313,7 @@ if __name__ == "__main__":
     parser.add_argument("--embedding_path", type=str, default="models/static/04_embedding.onnx")
     parser.add_argument("--attnmask_path", type=str, default="models/static/05_attnmask.onnx")
     parser.add_argument("--t2s_decoder_path", type=str, default="models/static/06_t2s_decoder.onnx")
-    parser.add_argument("--predict_path", type=str, default="models/static/07_predict.onnx")
+    parser.add_argument("--predict_path", type=str, default="models/static/07_ar_predict.onnx")
     parser.add_argument("--sample_path", type=str, default="models/static/08_sample.onnx")
     parser.add_argument("--vits_decoder_path", type=str, default="models/static/09_vits_decoder.onnx")
 
@@ -318,6 +327,6 @@ if __name__ == "__main__":
     gptsovits = GptSovits(args)
     gptsovits(args)
 
-    print("put time : ",time.time() - start)
+    print("put time : ",time.time() - start)  # 500s
 
 

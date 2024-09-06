@@ -241,7 +241,6 @@ class T2SModel:
         self.update_next_step = BModel(cache_dir + 'update_next_step_1684x_f32.bmodel')
         # self.decoder = T2SStage(cache_dir)
         self.decoder = ort.InferenceSession(cache_dir + 't2s_transformer.onnx')
-        # self.decoder = ort.InferenceSession(cache_dir + 't2s_transformer2.onnx')
 
 
 
@@ -268,9 +267,6 @@ class T2SModel:
             # xy_dec, k_cache, v_cache, current_size = self.decoder(xy_pos, k_cache, v_cache, current_size)
 
             ########### method 2 : self.decoder use 'models/cache/t2s_transformer.onnx' ###############
-            # xy_dec, k_cache, v_cache, current_size = self.decoder.run(None, {"xy_pos":xy_pos,"ik":k_cache, "iv":v_cache, "isize":np.int64([current_size])})
-
-            ########### method 3 : self.decoder use 'models/cache/t2s_transformer2.onnx' ###############
             xy_dec, k, v = self.decoder.run(None, {"xy_pos":xy_pos,"ik":k_cache, "iv":v_cache, "current_size":np.int64([current_size])})
             k_cache[:, :, current_size: current_size+1, :] = k
             v_cache[:, :, current_size: current_size+1, :] = v
