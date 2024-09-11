@@ -300,7 +300,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--ssl_path", type=str, default="models/bmodel/00_cnhubert_1684x_f32.bmodel")
     parser.add_argument("--vits_encoder_path", type=str, default="models/bmodel/01_vits_encoder_1684x_f32.bmodel")
-    parser.add_argument("--g2pw_path", type=str, default="models/g2pw_tokenizer")
+    parser.add_argument("--g2pw_path", type=str, default="GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large")
     parser.add_argument("--bert_path", type=str, default="models/bmodel/02_bert_1684x_f32.bmodel")
     parser.add_argument("--t2s_encoder_path", type=str, default="models/bmodel/03_t2s_encoder_1684x_f32.bmodel")
     parser.add_argument("--embedding_path", type=str, default="models/bmodel/04_embedding_1684x_f32.bmodel")

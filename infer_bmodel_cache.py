@@ -343,9 +343,9 @@ if __name__ == "__main__":
     parser.add_argument("--t2s_cache_decoder_path", type=str, default="models/cache/")
     parser.add_argument("--vits_decoder_path", type=str, default="models/static/09_vits_decoder_1684x_f32.bmodel")
 
-    parser.add_argument("--ref_wav_path", type=str, default="参考音频/说话-杨先生问的好问题，我一时半会儿也答不上来。容我想想…….wav")
-    parser.add_argument("--text", type=str, default="大家好，我是来自四川理塘的真先生。") #三个标点符号首句少于四个字，两个标点符号。
-    parser.add_argument("--prompt_text", type=str, default="杨先生问的好问题，我一时半会儿也答不上来。容我想想……") #三个标点符号
+    parser.add_argument("--ref_wav_path", type=str, default="参考音频/说话-正是像停云小姐这样的接渡使往来周旋，仙舟的贸易才能有如今的繁盛。.wav")
+    parser.add_argument("--text", type=str, default="大家好，我是来自四川理塘的王真先生。") #三个标点符号。首句少于四个字，两个标点符号。
+    parser.add_argument("--prompt_text", type=str, default="。正是像停云小姐这样的接渡使往来周旋，仙舟的贸易才能有如今的繁盛。") #三个标点符号
 
     args = parser.parse_args()
     start = time.time()
