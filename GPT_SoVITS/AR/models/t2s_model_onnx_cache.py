@@ -38,6 +38,7 @@ class T2SBlock(nn.Module):
         self.hidden_dim = hidden_dim
         self.mlp = mlp
         
+        # Define layers
         self.qkv = nn.Linear(hidden_dim, 3 * hidden_dim)
         self.qkv.weight = nn.Parameter(qkv_w)
         self.qkv.bias = nn.Parameter(qkv_b)
@@ -76,7 +77,7 @@ class T2SBlock(nn.Module):
         x = self.norm1(x + attn)
         x = self.norm2(x + self.mlp(x))
         
-        return x, ik, iv
+        return x, k_cache[:,1:], v_cache[:,1:]
 
     def first(self, x, attn_mask):
         q, k, v = self.qkv(x).chunk(3, dim=-1)
@@ -102,25 +103,27 @@ class T2SBlock(nn.Module):
         x = self.norm2(x + self.mlp(x))
         return x, k_cache, v_cache
 
-
 class T2STransformer(nn.Module):
     def __init__(self, num_blocks: int, blocks: List[nn.Module]):
         super(T2STransformer, self).__init__()
         self.num_blocks = num_blocks
         self.blocks = nn.ModuleList(blocks)
 
-    def forward(self, x, k_cache, v_cache, current_size):
-        k_list = torch.zeros(24,1,1,512)
-        v_list = torch.zeros(24,1,1,512)
-        k_cache = k_cache[:, :, : current_size, :]
-        v_cache = v_cache[:, :, : current_size, :]
+    def forward(self, x, k_cache, v_cache):
+        k_cache = k_cache.unbind(0)
+        v_cache = v_cache.unbind(0)
+
+        k_: List[torch.Tensor] = []
+        v_: List[torch.Tensor] = []
 
         for i in range(self.num_blocks):
-            x, ik, iv = self.blocks[i](x, k_cache[i], v_cache[i])
-            k_list[i] = ik
-            v_list[i] = iv
-
-        return x, k_list, v_list
+            x, k, v = self.blocks[i](x, k_cache[i], v_cache[i])
+            k_.append(k)
+            v_.append(v)
+    
+        k_tensor = torch.stack(k_, dim=0)
+        v_tensor = torch.stack(v_, dim=0)
+        return x, k_tensor, v_tensor
     
     def first(self, x, attn_mask):
         k_cache: List[torch.Tensor] = []
@@ -129,16 +132,16 @@ class T2STransformer(nn.Module):
             x, k, v = block.first(x, attn_mask)
             k_cache.append(k)
             v_cache.append(v)
-        
-        current_size = k_cache[0].size(1)
+    
         k_cache_tensor = torch.stack(k_cache, dim=0)
         v_cache_tensor = torch.stack(v_cache, dim=0)
-        target_size = 1024
-        pad_size = target_size - current_size
-        k_cache_tensor = F.pad(k_cache_tensor, (0, 0, 0, pad_size))
-        v_cache_tensor = F.pad(v_cache_tensor, (0, 0, 0, pad_size))
-        return x, k_cache_tensor, v_cache_tensor, current_size
 
+        current_size = k_cache[0].size(1)
+        target_size = 512
+        pad_size = target_size - current_size
+        k_cache_tensor = F.pad(k_cache_tensor, (0, 0, pad_size, 0))
+        v_cache_tensor = F.pad(v_cache_tensor, (0, 0, pad_size, 0))
+        return x, k_cache_tensor, v_cache_tensor
 
 
 
@@ -329,10 +332,12 @@ class Text2SemanticDecoder(nn.Module):
             prefix_len = y.shape[1]
 
 
+            ### embedding module: input: x,y  output: xy_pos,xy_attn_mask,prefix_len ###
             y_emb = self.ar_audio_embedding(y)
             y_len = y_emb.shape[1]
             y_pos = self.ar_audio_position(y_emb)
             xy_pos = torch.concat([x, y_pos], dim=1) 
+
 
             # torch.onnx.export(
             #     self.mask,
@@ -350,10 +355,22 @@ class Text2SemanticDecoder(nn.Module):
             xy_attn_mask = torch.concat([x_attn_mask_pad, y_attn_mask], dim=0)
             xy_attn_mask = canonical_mask(xy_attn_mask, xy_pos.dtype)
             
-            xy_dec, k_cache, v_cache, current_size = self.t2s_transformer.first(xy_pos, xy_attn_mask)
 
-            print("x_len:",x_len,"y_len:",y_len)
-            print("current_size",current_size)
+            # torch.onnx.export(
+            #     self.first_stage_decoder,
+            #     (xy_pos, xy_attn_mask),
+            #     "onnx/cache/first_stage_decoder.onnx",
+            #     input_names=["xy_pos", "xy_attn_mask", ],
+            #     output_names=["xy_dec", "k", "v"],
+            #     do_constant_folding=True,
+            #     opset_version=15,
+            # )
+
+            xy_dec, k_cache, v_cache = self.t2s_transformer.first(xy_pos, xy_attn_mask)
+
+
+
+            print("xy_pos:",xy_pos.shape, "k_cache:",k_cache.shape)
 
             logits = self.ar_predict_layer(xy_dec[:, -1])
             logits = logits[:, :-1]
@@ -371,33 +388,43 @@ class Text2SemanticDecoder(nn.Module):
             samples = sample(logits[0], y, top_k=top_k, top_p=1.0, repetition_penalty=1.35)[0].unsqueeze(0)
             y = torch.concat([y, samples], dim=1)
 
+            ### Update next step module: input: y,idx  output: xy_pos ###
             y_emb = self.ar_audio_embedding(y[:, -1:])
             xy_pos = y_emb * self.ar_audio_position.x_scale + self.ar_audio_position.alpha * self.ar_audio_position.pe[:, y_len].to(dtype=y_emb.dtype,device=y_emb.device)
 
 
+            stop = False
+
             # torch.onnx.export(
             #     self.t2s_transformer,
-            #     (xy_pos, k_cache, v_cache, torch.tensor([current_size])),
+            #     (xy_pos, k_cache, v_cache),
             #     "onnx/cache/t2s_transformer.onnx",
-            #     input_names=["xy_pos", "ik", "iv", "current_size"],
+            #     input_names=["xy_pos", "ik", "iv", ],
             #     output_names=["xy_dec", "k", "v"],
             #     do_constant_folding=True,
             #     opset_version=15,
             # )
 
             for idx in tqdm(range(1,500)):
-                xy_dec, k, v = self.t2s_transformer(xy_pos, k_cache, v_cache, current_size)
-                k_cache[:, :, current_size: current_size+1, :] = k
-                v_cache[:, :, current_size: current_size+1, :] = v
+                xy_dec, k_cache, v_cache = self.t2s_transformer(xy_pos, k_cache, v_cache)
 
-                current_size = current_size + 1
                 logits = self.ar_predict_layer(xy_dec[:, -1])
                 samples = sample(logits[0], y, top_k=top_k, top_p=1.0, repetition_penalty=1.35)[0].unsqueeze(0)
                 y = torch.concat([y, samples], dim=1)
 
-                if early_stop_num != -1 and (y.shape[1] - prefix_len) > early_stop_num: break
-                if torch.argmax(logits, dim=-1)[0] == self.EOS or samples[0, 0] == self.EOS: break
+                if early_stop_num != -1 and (y.shape[1] - prefix_len) > early_stop_num:
+                    print("use early stop num:", early_stop_num)
+                    stop = True
+                if torch.argmax(logits, dim=-1)[0] == self.EOS or samples[0, 0] == self.EOS:
+                    stop = True
+                if stop:
+                    if y.shape[1] == 0:
+                        y = torch.concat([y, torch.zeros_like(samples)], dim=1)
+                        print("bad zero prediction")
+                    print(f"T2S Decoding EOS [{prefix_len} -> {y.shape[1]}]")
+                    break
 
+                ### Update next step module: input: y,idx  output: xy_pos ###
                 y_emb = self.ar_audio_embedding(y[:, -1:])
                 xy_pos = y_emb * self.ar_audio_position.x_scale + self.ar_audio_position.alpha * self.ar_audio_position.pe[:, y_len + idx].to(dtype=y_emb.dtype,device=y_emb.device)
 

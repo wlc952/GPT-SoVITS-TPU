@@ -1,4 +1,3 @@
-# FOR infer_bmodel.py
 librosa
 onnxruntime
 cn2an
@@ -6,4 +5,4 @@ pypinyin
 transformers
 jieba_fast
 opencc
-# tpu_perf
+soundfile
