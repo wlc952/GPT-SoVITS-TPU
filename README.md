@@ -1,7 +1,6 @@
 # GPT-SoVITS-TPU
 
-- [x] Test on 1684x server (tpu_dev docker with Miniconda) -- PASS
-- [x] Test on SG2300X -- PASS
+**New version that supports up to 85 characters and is a simplified version of the project, address: https://www.modelscope.cn/models/wlc952/GPT-SoVITS-TPU**
   
 ## Prepare the environment
 
