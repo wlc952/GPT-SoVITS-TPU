@@ -1,6 +1,8 @@
 # GPT-SoVITS-TPU
 
 **New version that supports up to 85 characters and is a simplified version of the project, address: https://www.modelscope.cn/models/wlc952/GPT-SoVITS-TPU**
+![image](https://github.com/user-attachments/assets/72c7a966-9299-402b-9523-603985a3e50b)
+
   
 ## Prepare the environment
 
