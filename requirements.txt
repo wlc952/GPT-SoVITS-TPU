@@ -1,8 +1,9 @@
+transformers
 librosa
 onnxruntime
-cn2an
+soundfile # Maybe need to "sudo apt-get install libsndfile1"
+gradio
 pypinyin
-transformers
+cn2an
 jieba_fast
 opencc
-soundfile
