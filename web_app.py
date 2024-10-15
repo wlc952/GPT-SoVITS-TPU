@@ -2,7 +2,7 @@ import gradio as gr
 import numpy as np
 import time
 import logging
-from run_by_sail import *
+from main import *
 from utils import *
 
 # 设置日志记录
@@ -24,10 +24,7 @@ class GptSovits_long(GptSovits):
         a, b, c = inputs["input_ids"].astype(np.int32), inputs["token_type_ids"].astype(np.int32), inputs["attention_mask"].astype(np.int32)
         c[..., len_ori_text:] = 0
 
-        if len(norm_text) == 35:
-            res = self.bmodels([a, b, c], net_name='02_bert_35')[0]
-        else:
-            res = self.bmodels([a, b, c], net_name='02_bert')[0]
+        res = self.bmodels([a, b, c], net_name='02_bert_35')[0]
 
         assert len(word2ph) == len(norm_text)
         phone_level_feature = []
@@ -38,21 +35,21 @@ class GptSovits_long(GptSovits):
         bert = phone_level_feature.T
         return bert
 
-    def g2pw_bert_process(self, text, fix_len=85):
+    def g2pw_bert_process(self, text, type='target'):
         norm_text = self.prepare_input(text)
         len_ori_text = len(norm_text)
 
-        if fix_len == 85:
-            how_many = sum(1 for x in norm_text if x in splits)
-            delta = 4 - how_many
-            norm_text = "." * delta + norm_text
+        if type == 'target':
+            num_dots = 3
         else:
-            how_many = sum(1 for x in norm_text if x in splits)
-            delta = 3 - how_many
+            num_dots = 2
+        how_many = sum(1 for x in norm_text if x in splits)
+        delta = num_dots - how_many
+        if delta > 0:
             norm_text = "." * delta + norm_text
 
 
-        norm_text = fix_text_lenth(norm_text, fix_len)
+        norm_text = fix_text_lenth(norm_text, fix_len=35)
 
         logging.info(f"文本处理完成：“{norm_text}”, 长度：{len(norm_text)}")
 

@@ -1,7 +1,8 @@
+wheel
 transformers
 librosa
 onnxruntime
-soundfile # Maybe need to "sudo apt-get install libsndfile1"
+soundfile
 gradio
 pypinyin
 cn2an

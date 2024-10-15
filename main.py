@@ -10,11 +10,12 @@ from text import cleaned_text_to_sequence
 from text.chinese2 import g2p, text_normalize
 import time
 import onnxruntime as ort
-from tpu_perf.infer import SGInfer
+import sophon.sail as sail
+from utils import trim_audio
 
 now_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(now_dir)
-
+sys.path.append(now_dir+'/text')
 
 
 splits = {"，", "。", "？", "！", ",", ".", "?", "!", "~", ":", "：", "—", "…", }
@@ -34,7 +35,7 @@ def find_penultimate_tag(lst):
                 return i
     return -1
 
-def fix_text_lenth(text, max_len = 85):
+def fix_text_lenth(text, max_len = 35):
     if len(text) > max_len:
         print(f"文本长度超过{max_len}个字符")
         raise ValueError
@@ -117,41 +118,75 @@ class HPS:
     win_length = 2048      # 窗长
 
 
-class BModel:
-    def __init__(self, model_path="", batch=1, device_id=(11,)) :
+class BmodelLoader:
+    def __init__(self, model_path, device_id=0) :
         self.model_path = model_path
-        self.model = SGInfer(model_path , batch=batch, devices=device_id)
         self.device_id = device_id
-        
+        try:
+            self.model = sail.Engine(model_path, device_id, sail.IOMode.SYSIO)
+        except Exception as e:
+            print("load model error; please check model path and device status;")
+            print(">>>> model_path: ",model_path)
+            print(">>>> device_id: ",device_id)
+            print(">>>> sail.Engine error: ",e)
+            raise e
+        sail.set_print_flag(False)
+        self.graph_name = self.model.get_graph_names()
+        self.input_name = []
+        self.output_name = []
+        for name in self.graph_name:
+            self.input_name.append(self.model.get_input_names(name))
+            self.output_name.append(self.model.get_output_names(name))
+
     def __str__(self):
         return "EngineOV: model_path={}, device_id={}".format(self.model_path,self.device_id)
-        
-    def __call__(self, args):
+    
+    def __call__(self, args, net_name=None, net_num=0):
         if isinstance(args, list):
             values = args
         elif isinstance(args, dict):
             values = list(args.values())
         else:
             raise TypeError("args is not list or dict")
-        task_id = self.model.put(*values)
-        task_id, results, valid = self.model.get()
-        return results
+        args = {}
+        if net_name is not None:
+            graph_name = net_name
+            input_name = self.model.get_input_names(net_name)
+            output_name = self.model.get_output_names(net_name)
+        elif net_num is not None:
+            graph_name = self.graph_name[net_num]
+            input_name = self.input_name[net_num]
+            output_name = self.output_name[net_num]
+        else:
+            input_name = self.input_name[0]
+            output_name = self.output_name[0]
+
+        for i in range(len(values)):
+            args[input_name[i]] = values[i]
+
+        output = self.model.process(graph_name, args)
+        res = []
+        for name in output_name:
+            res.append(output[name])
+        return res
 
 
-    
-class G2PWBertModel:
-    def __init__(self, bert_path):
+class GptSovits:
+    def __init__(self, model_path="models"):
         self.tokenizer = AutoTokenizer.from_pretrained("g2pw_tokenizer")
-        self.bert_model = BModel(bert_path + "/02_bert.bmodel")
-        self.bert_model_35 = BModel(bert_path  + "/02_bert_35.bmodel")
+        self.bmodels = BmodelLoader(model_path + '/gptsovits.bmodel')
+        self.attnmask = ort.InferenceSession(model_path + '/05_t2s_attnmask.onnx')
+        self.sample_layer = ort.InferenceSession(model_path + '/08_t2s_sample_layer.onnx')
 
-    
+        self.hps = HPS()
+        self.randn_np = np.random.randn(1, 192, 400).astype(np.float32)
+
     def prepare_input(self, text, prompt_text):
         prompt_text = prompt_text.strip("\n")
         if (prompt_text[-1] not in splits): prompt_text += "。" 
-        print("实际输入的参考文本:", prompt_text)
+        # print("实际输入的参考文本:", prompt_text)
         text = text.strip("\n")
-        print("实际输入的目标文本:", text)
+        # print("实际输入的目标文本:", text)
         norm_text = text_normalize(text)
         norm_prompt_text = text_normalize(prompt_text)
         return norm_text, norm_prompt_text
@@ -161,10 +196,8 @@ class G2PWBertModel:
         a, b, c = inputs["input_ids"].astype(np.int32), inputs["token_type_ids"].astype(np.int32), inputs["attention_mask"].astype(np.int32)
         c[...,len_ori_text:] = 0
 
-        if len(norm_text) == 35:
-            res = self.bert_model_35([a, b, c])[0]
-        else:
-            res = self.bert_model([a, b, c])[0]
+
+        res = self.bmodels([a, b, c], net_name='02_bert_35')[0]
 
         assert len(word2ph) == len(norm_text)
         phone_level_feature = []
@@ -175,23 +208,23 @@ class G2PWBertModel:
         bert_onnx = phone_level_feature.T
         return bert_onnx
     
-    def __call__(self, text, prompt_text):
+    def g2pw_bert_process(self, text, prompt_text):
         norm_text, norm_prompt_text = self.prepare_input(text, prompt_text)
 
         len_ori_text = len(norm_text)
         len_ori_prompt_text = len(norm_prompt_text)
 
         norm_prompt_text = fix_text_lenth(norm_prompt_text, 35)
-        norm_text = fix_text_lenth(norm_text, 85)
+        norm_text = fix_text_lenth(norm_text, 35)
 
-        print("处理后的参考文本:", norm_prompt_text, len(norm_prompt_text))
-        print("处理后的目标文本:", norm_text, len(norm_text))
+        # print("处理后的参考文本:", norm_prompt_text, len(norm_prompt_text))
+        # print("处理后的目标文本:", norm_text, len(norm_text))
 
         phones1, word2ph1 = g2p(norm_text) #g2pw模型
         phones1 = cleaned_text_to_sequence(phones1, "v2")
         len_phones = len(phones1)
         id = find_penultimate_tag(phones1)
-        phones1[id+1:] = [2] * (len(phones1) - id - 1)# "_":95, "-":2, '停': 351, '空':352
+        phones1[id+1:] = [2] * (len(phones1) - id - 1)# "_":95, "-":2
 
         bert1 = self.get_bert(norm_text, word2ph1, len_ori_text) #BERT模型
 
@@ -207,102 +240,80 @@ class G2PWBertModel:
         all_phoneme_ids = phones2 + phones1
         all_phoneme_ids = np.expand_dims(np.int32(all_phoneme_ids), 0)
         return bert, all_phoneme_ids, phones1
-
-
-
-class T2SModel:
-    def __init__(self, model_path, device_id=(4,)):
-        self.encoder = BModel(model_path + "/03_t2s_encoder.bmodel", device_id=device_id)
-        self.embedding = BModel(model_path + '/04_t2s_embedding.bmodel', device_id=device_id)
-        self.attnmask = ort.InferenceSession(model_path + '/05_t2s_attnmask.onnx')
-        self.first_stage_decoder = BModel(model_path + '/06_t2s_first_step_decoder.bmodel', device_id=device_id)
-        self.ar_predict_layer = BModel(model_path + '/07_t2s_predict_layer.bmodel', device_id=device_id)
-        self.sample_layer = ort.InferenceSession(model_path + '/08_t2s_sample_layer.onnx')
-        self.update_next_step = BModel(model_path + '/09_t2s_update_next_step.bmodel', device_id=device_id)
-        self.decoder = BModel(model_path + '/10_t2s_next_step_decoder.bmodel', device_id=device_id)
-
-
-    def __call__(self, phoneme_ids, bert, prompts):
-        x = self.encoder([phoneme_ids, bert])[0]
+    
+    def t2s_process(self, phoneme_ids, bert, prompts, top_k=15):
+        sample_dict = {"top_k": np.int64([top_k])}
+                           
+        x = self.bmodels([phoneme_ids, bert], net_name='03_t2s_encoder')[0]
         y = prompts
 
         y_len = y.shape[1]
         x_len = x.shape[1]
 
-        xy_pos = self.embedding([x, y])[0]
+        xy_pos = self.bmodels([x, y], net_name='04_t2s_embedding')[0]
         xy_attn_mask = self.attnmask.run(None, {"x_len": np.int64([x_len]), "y_len": np.int64([y_len])})[0]
 
-        xy_dec, k_cache, v_cache = self.first_stage_decoder([xy_pos, xy_attn_mask])
+        xy_dec, k_cache, v_cache = self.bmodels([xy_pos, xy_attn_mask], net_name='06_t2s_first_step_decoder')
 
-        logits = self.ar_predict_layer([xy_dec[:, -1]])[0]
-        logits = logits[:, :-1]   
-        samples, y = self.sample_layer.run(None, {"logits": logits[0], "y": np.int64(y)})
+        logits = self.bmodels([xy_dec[:, -1]], net_name='07_t2s_predict_layer')[0]
+        logits = logits[:, :-1]
+
+        sample_dict["logits"] = logits[0]
+        sample_dict["y"] = np.int64(y)
+        samples, y = self.sample_layer.run(None, sample_dict)
 
         y = np.int32(y)
-        xy_pos = self.update_next_step([y[:, -1:], np.int32([y_len])])[0]
-
+        xy_pos = self.bmodels([y[:, -1:], np.int32([y_len])], net_name='09_t2s_update_next_step')[0]
 
         for idx in tqdm(range(1,600)):
-            xy_dec, k_cache, v_cache = self.decoder([xy_pos, k_cache, v_cache])
+            xy_dec, k_cache, v_cache = self.bmodels([xy_pos, k_cache, v_cache], net_name='10_t2s_next_step_decoder')
 
-            logits = self.ar_predict_layer([xy_dec[:, -1]])[0]
-            samples, y = self.sample_layer.run(None, {"logits": logits[0], "y": np.int64(y)})
+            logits = self.bmodels([xy_dec[:, -1]], net_name='07_t2s_predict_layer')[0]
+
+            sample_dict["logits"] = logits[0]
+            sample_dict["y"] = np.int64(y)
+            samples, y = self.sample_layer.run(None, sample_dict)
+
             y = np.int32(y)
             
             if np.argmax(logits, axis=-1)[0] == 1024 or samples[0, 0] == 1024:  break
 
-            xy_pos = self.update_next_step([y[:, -1:], np.int32([idx + y_len])])[0]
+            xy_pos = self.bmodels([y[:, -1:], np.int32([idx + y_len])], net_name='09_t2s_update_next_step')[0]
                     
-        print("y:", y[:, :-1])
         y = y[:, :-1]
         idx = idx -1
         return y[...,-idx:]
-
-
-
-class GptSovits:
-    def __init__(self, args):
-        model_path = args.model_path
-        self.ssl_model = BModel(model_path + "/00_cnhubert.bmodel")
-        self.vits_encoder = BModel(model_path + "/01_vits_encoder.bmodel")
-        self.bert_model = G2PWBertModel(model_path)
-        self.t2s_model = T2SModel(model_path)
-        self.vits_decoder = BModel(model_path + "/11_vits_decoder.bmodel")
-        self.hps = HPS()
-        self.randn_np = np.random.randn(1, 192, 1200).astype(np.float32)
     
-    def __call__(self, args):
+    def __call__(self, ref_wav_path, text, prompt_text, top_k=15):
         start = time.time()
-        ref_wav_16k= prepare_wav_input(args.ref_wav_path)
-        ssl_content = self.ssl_model([ref_wav_16k])[0]
-        prompt = self.vits_encoder([ssl_content])[0]
-        bert, all_phoneme_ids, phones1 = self.bert_model(args.text, args.prompt_text)
+        ref_wav_16k= prepare_wav_input(ref_wav_path)
+        ssl_content = self.bmodels([ref_wav_16k], net_name='00_cnhubert')[0]
+        prompt = self.bmodels([ssl_content], net_name='01_vits_encoder')[0]
+        bert, all_phoneme_ids, phones1 = self.g2pw_bert_process(text, prompt_text)
 
-        pred_semantic = self.t2s_model(all_phoneme_ids, bert, prompt)
+        pred_semantic = self.t2s_process(all_phoneme_ids, bert, prompt, top_k)
 
-        SET_PRED_SEMANTIC_LEN = 600
+        SET_PRED_SEMANTIC_LEN = 200
         if pred_semantic.shape[-1] < SET_PRED_SEMANTIC_LEN:
             padding_size = SET_PRED_SEMANTIC_LEN - pred_semantic.shape[-1]
             pred_semantic = np.pad(pred_semantic, pad_width=((0, 0), (0, padding_size)), mode='edge')
 
         pred_semantic = np.expand_dims(pred_semantic, 0)
         phones1 = np.expand_dims(np.int32(phones1), 0)
-        refer = get_spepc(self.hps, args.ref_wav_path)
+        refer = get_spepc(self.hps, ref_wav_path)
         
-        audio_np = self.vits_decoder([pred_semantic, phones1, refer, self.randn_np])[0]
-
+        audio_np = self.bmodels([pred_semantic, phones1, refer, self.randn_np], net_num=-1)[0]
         audio_np = audio_np[0,0]
+
         max_audio=np.abs(audio_np).max()
         if max_audio>1: audio_np/=max_audio
 
         audio_test = (audio_np * 32768).astype(np.int16)
+        # audio_test = trim_audio(audio_test)
         soundfile.write("out_test.wav", audio_test, self.hps.sampling_rate)
-
         print("耗时：", time.time() - start)
-        return audio_test
+        return self.hps.sampling_rate, audio_test
         
-
-
 
 if __name__ == "__main__":
     import argparse
@@ -310,16 +321,16 @@ if __name__ == "__main__":
     parser.add_argument("--model_path", type=str, default="models")
 
     parser.add_argument("--ref_wav_path", type=str, default="参考音频/说话-杨先生问的好问题，我一时半会儿也答不上来。容我想想…….wav")
-    parser.add_argument("--text", type=str, default="此外内容还和芯片后端以及产品硬件前端相呼应。正是像停云小姐这样的节度使往来周旋，仙舟的贸易才能有如今的繁盛。实现了用户无需编程只需通过修改简易的配置文件。") # 四个标点，85字以内。
+    parser.add_argument("--text", type=str, default="此外内容还和芯片后端以及产品硬件前端相呼应。正是像停云小姐这样的节度使往来周旋。") # 四个标点，85字以内。
     parser.add_argument("--prompt_text", type=str, default="杨先生问的好问题，我一时半会儿也答不上来。容我想想……") # 三个标点，35字以内。
 
     args = parser.parse_args()
     start = time.time()
 
-    a = GptSovits(args)
-    a(args)
+    a = GptSovits(args.model_path)
+    a(args.ref_wav_path, args.text, args.prompt_text, 15, 1.0)
 
-    print("总耗时：",time.time() - start) # 88.55 91.99
+    print("总耗时：",time.time() - start) 
 
 
 

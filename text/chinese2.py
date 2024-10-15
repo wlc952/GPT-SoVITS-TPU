@@ -96,10 +96,7 @@ not_erhua = {
     "孙儿", "侄孙儿", "女儿", "男儿", "红孩儿", "花儿", "虫儿", "马儿", "鸟儿", "猪儿", "猫儿",
     "狗儿", "少儿"
 }
-def _merge_erhua(initials: list[str],
-                finals: list[str],
-                word: str,
-                pos: str) -> list[list[str]]:
+def _merge_erhua(initials, finals, word, pos):
     """
     Do erhub.
     """
