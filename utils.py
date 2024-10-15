@@ -63,10 +63,6 @@ def audio_post_process2(sr, audio_array, min_silence_len=200):
 
     # 找到非开头和末尾的最长静音段
     longest_silence = max(silences, key=lambda x: x[1] - x[0])
-    silences.remove(longest_silence)
-
-    # 找到第二长的静音段
-    longest_silence = max(silences, key=lambda x: x[1] - x[0])
 
     # 只保留该静音段之前的音频内容
     retained_segment = audio_segment[:longest_silence[0]]
@@ -193,6 +189,20 @@ def cut4(inp):
     opts = [item for item in opts if not set(item).issubset(punctuation)]
     return "\n".join(opts)
 
+def cut2(inp):
+    inp = inp.strip("\n")
+    inps = split(inp)
+    split_idx = list(range(0, len(inps), 2))
+    split_idx.append(None)
+    if len(split_idx) > 1:
+        opts = []
+        for idx in range(len(split_idx)-1):
+            opts.append("".join(inps[split_idx[idx]: split_idx[idx + 1]]))
+    else:
+        opts = [inp]
+    opts = [item for item in opts if not set(item).issubset(punctuation)]
+    return "\n".join(opts)
+
 def process_text(texts):
     _text=[]
     if all(text in [None, " ", "\n",""] for text in texts):
@@ -222,7 +232,8 @@ def merge_short_text_in_array(texts, threshold):
     return result
 
 def process_long_text(text):
-    text = cut4(text)
+    # text = cut4(text)
+    text = cut2(text)
     while "\n\n" in text:
         text = text.replace("\n\n", "\n")
     texts = text.split("\n")

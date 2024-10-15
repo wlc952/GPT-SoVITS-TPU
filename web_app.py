@@ -125,7 +125,7 @@ iface = gr.Interface(
     inputs=[
         gr.Audio(sources="upload", type="filepath", label="参考语音(5~10s)"),
         gr.Textbox(lines=2, placeholder="输入参考文本...", label="参考文本(三个标点，35字以内。)"),
-        gr.Textbox(lines=2, placeholder="输入目标文本...", label="目标文本(四句一切，最好标点为4N个。)"),
+        gr.Textbox(lines=2, placeholder="输入目标文本...", label="目标文本(两句一切。)"),
         gr.Slider(value=15, label="Top-k", minimum=1, maximum=100, step=1),
         gr.Slider(value=1.0, label="Top-p", minimum=0.5, maximum=1.0, step=0.01),
         gr.Checkbox(value=True, label="是否进行后处理"),

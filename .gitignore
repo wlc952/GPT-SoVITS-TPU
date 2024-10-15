@@ -1,12 +1,2 @@
-00*.onnx
-01*.onnx
-02*.onnx
-03*.onnx
-04*.onnx
-06*.onnx
-07*.onnx
-09*.onnx
-10*.onnx
-11*.onnx
 out_test.wav
 __pycache__
