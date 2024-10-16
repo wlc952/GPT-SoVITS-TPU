@@ -171,8 +171,8 @@ class BmodelLoader:
 
 
 class GptSovits:
-    def __init__(self, model_path="models"):
-        self.tokenizer = AutoTokenizer.from_pretrained("g2pw_tokenizer")
+    def __init__(self, model_path="models", tokenizer="g2pw_tokenizer"):
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer)
         self.bmodels = BmodelLoader(model_path + '/gptsovits.bmodel')
         self.attnmask = ort.InferenceSession(model_path + '/05_t2s_attnmask.onnx')
         self.sample_layer = ort.InferenceSession(model_path + '/08_t2s_sample_layer.onnx')
@@ -317,6 +317,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_path", type=str, default="models")
+    parser.add_argument("--tokenizer", type=str, default="g2pw_tokenizer")
 
     parser.add_argument("--ref_wav_path", type=str, default="参考音频/说话-杨先生问的好问题，我一时半会儿也答不上来。容我想想…….wav")
     parser.add_argument("--text", type=str, default="内容还和芯产品硬件前端相呼应。正是像停云小姐这样的节度使往来周旋。") # 两个标点，35字以内。
@@ -325,14 +326,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     start = time.time()
 
-    a = GptSovits(args.model_path)
+    a = GptSovits(args.model_path, args.tokenizer)
     a(args.ref_wav_path, args.text, args.prompt_text, 15)
 
     print("总耗时：",time.time() - start) 
-
-
-
-
-
-
-
