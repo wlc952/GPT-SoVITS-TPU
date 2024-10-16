@@ -5,8 +5,6 @@ import logging
 from main import *
 from utils import *
 
-# 设置日志记录
-logging.basicConfig(level=logging.INFO)
 
 class GptSovits_long(GptSovits):
     def __init__(self):
@@ -120,6 +118,8 @@ class GptSovits_long(GptSovits):
             raise
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+
     gptsovits = GptSovits_long()
 
     def process_audio(audio, ref_text, target_text, top_k, post_process=True, min_silence_len=200):
