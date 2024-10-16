@@ -28,7 +28,7 @@ if is_g2pw:
     print("当前使用g2pw进行拼音推理")
     from text.g2pw import G2PWPinyin, correct_pronunciation
     parent_directory = os.path.dirname(current_file_path)
-    g2pw = G2PWPinyin(model_dir="text/G2PWModel",model_source="g2pw_tokenizer",v_to_u=False, neutral_tone_with_five=True)
+    g2pw = G2PWPinyin(model_dir=f"{current_file_path}/G2PWModel",model_source="g2pw_tokenizer",v_to_u=False, neutral_tone_with_five=True)
 
 rep_map = {
     "：": ",",
