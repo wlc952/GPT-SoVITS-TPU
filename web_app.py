@@ -119,26 +119,27 @@ class GptSovits_long(GptSovits):
             logging.error(f"处理音频时出错: {e}")
             raise
 
-gptsovits = GptSovits_long()
+if __name__ == "__main__":
+    gptsovits = GptSovits_long()
 
-def process_audio(audio, ref_text, target_text, top_k, post_process=True, min_silence_len=200):
-    sr, audio = gptsovits(audio, ref_text, target_text, top_k=top_k, post_process=post_process, min_silence_len=min_silence_len)
-    return sr, audio
+    def process_audio(audio, ref_text, target_text, top_k, post_process=True, min_silence_len=200):
+        sr, audio = gptsovits(audio, ref_text, target_text, top_k=top_k, post_process=post_process, min_silence_len=min_silence_len)
+        return sr, audio
 
-iface = gr.Interface(
-    fn=process_audio,
-    inputs=[
-        gr.Audio(sources="upload", type="filepath", label="参考语音(5~10s)"),
-        gr.Textbox(lines=2, placeholder="输入参考文本...", label="参考文本(三个标点，35字以内。)"),
-        gr.Textbox(lines=2, placeholder="输入目标文本...", label="目标文本(两句一切。)"),
-        gr.Slider(value=15, label="Top-k", minimum=1, maximum=100, step=1),
-        gr.Checkbox(value=False, label="是否进行后处理"),
-        gr.Slider(value=200, label="静音检测阈值(毫秒)", minimum=100, maximum=500, step=50),
-    ],
-    outputs=gr.Audio(label="生成的语音"),
-    title="GPT-SoVITS音色克隆",
-    description="上传一段参考语音，并输入参考文本和目标文本，将生成一段新的语音(仅支持中文)。",
-)
+    iface = gr.Interface(
+        fn=process_audio,
+        inputs=[
+            gr.Audio(sources="upload", type="filepath", label="参考语音(5~10s)"),
+            gr.Textbox(lines=2, placeholder="输入参考文本...", label="参考文本(三个标点，35字以内。)"),
+            gr.Textbox(lines=2, placeholder="输入目标文本...", label="目标文本(两句一切。)"),
+            gr.Slider(value=15, label="Top-k", minimum=1, maximum=100, step=1),
+            gr.Checkbox(value=False, label="是否进行后处理"),
+            gr.Slider(value=200, label="静音检测阈值(毫秒)", minimum=100, maximum=500, step=50),
+        ],
+        outputs=gr.Audio(label="生成的语音"),
+        title="GPT-SoVITS音色克隆",
+        description="上传一段参考语音，并输入参考文本和目标文本，将生成一段新的语音(仅支持中文)。",
+    )
 
-iface.launch()
+    iface.launch()
 
