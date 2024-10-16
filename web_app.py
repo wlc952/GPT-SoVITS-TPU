@@ -5,7 +5,6 @@ import logging
 from main import *
 from utils import *
 
-now_dir = os.path.dirname(os.path.abspath(__file__))
 
 class GptSovits_long(GptSovits):
     def __init__(self, model_path='models', tokenizer='g2pw_tokenizer'):
@@ -121,7 +120,7 @@ class GptSovits_long(GptSovits):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    gptsovits = GptSovits_long(now_dir + "/models", now_dir + "/g2pw_tokenizer")
+    gptsovits = GptSovits_long(gptsovits_dir + "/models", gptsovits_dir + "/g2pw_tokenizer")
 
     def process_audio(audio, ref_text, target_text, top_k, post_process=True, min_silence_len=200):
         sr, audio = gptsovits(audio, ref_text, target_text, top_k=top_k, post_process=post_process, min_silence_len=min_silence_len)

@@ -12,9 +12,9 @@ import time
 import onnxruntime as ort
 import sophon.sail as sail
 
-now_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(now_dir)
-sys.path.append(now_dir+'/text')
+gptsovits_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(gptsovits_dir)
+sys.path.append(gptsovits_dir+'/text')
 
 
 splits = {"，", "。", "？", "！", ",", ".", "?", "!", "~", ":", "：", "—", "…", }
