@@ -11,7 +11,6 @@ from text.chinese2 import g2p, text_normalize
 import time
 import onnxruntime as ort
 import sophon.sail as sail
-from utils import trim_audio
 
 now_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(now_dir)
@@ -35,7 +34,7 @@ def find_penultimate_tag(lst):
                 return i
     return -1
 
-def fix_text_lenth(text, max_len = 35):
+def fix_text_lenth(text, max_len=35):
     if len(text) > max_len:
         print(f"文本长度超过{max_len}个字符")
         raise ValueError
@@ -265,7 +264,7 @@ class GptSovits:
         y = np.int32(y)
         xy_pos = self.bmodels([y[:, -1:], np.int32([y_len])], net_name='09_t2s_update_next_step')[0]
 
-        for idx in tqdm(range(1,600)):
+        for idx in tqdm(range(1,301)):
             xy_dec, k_cache, v_cache = self.bmodels([xy_pos, k_cache, v_cache], net_name='10_t2s_next_step_decoder')
 
             logits = self.bmodels([xy_dec[:, -1]], net_name='07_t2s_predict_layer')[0]
@@ -309,7 +308,6 @@ class GptSovits:
         if max_audio>1: audio_np/=max_audio
 
         audio_test = (audio_np * 32768).astype(np.int16)
-        # audio_test = trim_audio(audio_test)
         soundfile.write("out_test.wav", audio_test, self.hps.sampling_rate)
         print("耗时：", time.time() - start)
         return self.hps.sampling_rate, audio_test
@@ -321,14 +319,14 @@ if __name__ == "__main__":
     parser.add_argument("--model_path", type=str, default="models")
 
     parser.add_argument("--ref_wav_path", type=str, default="参考音频/说话-杨先生问的好问题，我一时半会儿也答不上来。容我想想…….wav")
-    parser.add_argument("--text", type=str, default="此外内容还和芯片后端以及产品硬件前端相呼应。正是像停云小姐这样的节度使往来周旋。") # 四个标点，85字以内。
+    parser.add_argument("--text", type=str, default="内容还和芯产品硬件前端相呼应。正是像停云小姐这样的节度使往来周旋。") # 两个标点，35字以内。
     parser.add_argument("--prompt_text", type=str, default="杨先生问的好问题，我一时半会儿也答不上来。容我想想……") # 三个标点，35字以内。
 
     args = parser.parse_args()
     start = time.time()
 
     a = GptSovits(args.model_path)
-    a(args.ref_wav_path, args.text, args.prompt_text, 15, 1.0)
+    a(args.ref_wav_path, args.text, args.prompt_text, 15)
 
     print("总耗时：",time.time() - start) 
 

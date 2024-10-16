@@ -130,27 +130,20 @@ def audio_post_process(sr, audio_array, min_silence_len=200):
     return sr, retained_array
 
 # 02 静音检测与裁剪
-def estimate_threshold(audio_data, percentile=87):
-    """通过能量的百分位数来估计静音阈值。"""
-    energy = np.abs(audio_data)
-    return np.percentile(energy, percentile)
+def trim_audio_librosa(audio_data_float, top_db=30):
+    """使用librosa库裁剪音频数据中的静音部分。
+    
+    Args:
+        audio_data (np.array): 输入的音频数据数组。
+        top_db (int): 静音阈值，以分贝为单位。
 
-def trim_silence(audio_data, threshold):
-    """裁剪末尾的静音部分。"""
-    energy = np.abs(audio_data)
-    indices = np.where(energy > threshold)[0]
-    if indices.size > 0:
-        max_index = indices[-1] + 1
-    else:
-        max_index = 0
-    return audio_data[:max_index]
+    Returns:
+        np.array: 裁剪后的音频数据。
+    """
+    # librosa需要浮点数类型的音频数据
+    trimmed_data, _ = librosa.effects.trim(audio_data_float, top_db=top_db)
+    return trimmed_data
 
-def trim_audio(audio_array):
-    # 估计静音阈值
-    threshold = estimate_threshold(audio_array)
-    # 裁剪静音
-    trimmed_audio = trim_silence(audio_array, threshold)
-    return trimmed_audio
 
 
 # 03 文本处理
@@ -192,16 +185,30 @@ def cut4(inp):
 def cut2(inp):
     inp = inp.strip("\n")
     inps = split(inp)
-    split_idx = list(range(0, len(inps), 2))
-    split_idx.append(None)
-    if len(split_idx) > 1:
-        opts = []
-        for idx in range(len(split_idx)-1):
-            opts.append("".join(inps[split_idx[idx]: split_idx[idx + 1]]))
-    else:
-        opts = [inp]
+    opts = []
+    i = 0
+    while i < len(inps):
+        # 尝试获取两个标点的位置
+        if i + 1 < len(inps):
+            # 检查两个标点切分后的字符数
+            combined = "".join(inps[i:i+2])
+            if len(combined) >= 35:
+                # 如果字符数大于等于35，则只使用一个标点切分
+                opts.append("".join(inps[i:i+1]))
+                i += 1
+            else:
+                # 否则使用两个标点切分
+                opts.append(combined)
+                i += 2
+        else:
+            # 如果只剩一个标点或者没有标点，直接添加剩余部分
+            opts.append("".join(inps[i:i+1]))
+            i += 1
+
+    # 过滤掉只包含标点的段落
     opts = [item for item in opts if not set(item).issubset(punctuation)]
     return "\n".join(opts)
+
 
 def process_text(texts):
     _text=[]
@@ -244,17 +251,6 @@ def process_long_text(text):
 
 # 示例调用
 if __name__ == "__main__":
-    # 加载示例音频数据
-    import time
-    input_path = "audio (1).wav"
-    audio_segment = AudioSegment.from_wav(input_path)
-    audio_array = np.array(audio_segment.get_array_of_samples(), dtype=np.int16)
-    sr = audio_segment.frame_rate
-    start = time.time()
-    # 调用封装后的函数进行处理
-    new_sr, merged_array = audio_post_process(sr, audio_array)
-    sf.write("audio_part.wav", merged_array, new_sr)
-
-    print(f"处理后的采样率: {new_sr}")
-    print(f"合并后的 NumPy 数组形状: {merged_array.shape}")
-    print(f"处理耗时: {time.time() - start} 秒")
+    text = "这是一个测试文本，用于测试文本处理函数。这是第二个测试文本用于测试文本处理函数, 这是第三个测试文本用于测试文本处理函数。"
+    texts = process_long_text(text)
+    print(texts)
