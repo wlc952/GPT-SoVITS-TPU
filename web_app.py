@@ -5,6 +5,9 @@ import logging
 from main import *
 from utils import *
 
+gptsovits_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(gptsovits_dir)
+
 
 class GptSovits_long(GptSovits):
     def __init__(self, model_path='models', tokenizer='g2pw_tokenizer'):
