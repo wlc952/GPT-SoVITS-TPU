@@ -15,7 +15,8 @@ sys.path.append(gptsovits_dir)
 sys.path.append(gptsovits_dir+'/text')
 
 from text import cleaned_text_to_sequence
-from text.chinese2 import g2p, text_normalize
+# from text.chinese2 import g2p, text_normalize # 对多音字支持好
+from text.chinese import g2p, text_normalize # 速度快
 
 
 splits = {"，", "。", "？", "！", ",", ".", "?", "!", "~", ":", "：", "—", "…", }
