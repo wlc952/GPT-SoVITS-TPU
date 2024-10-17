@@ -3,6 +3,7 @@ import numpy as np
 import time
 import logging
 import os
+import sys
 
 gptsovits_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(gptsovits_dir)
