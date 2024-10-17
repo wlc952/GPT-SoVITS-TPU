@@ -2,11 +2,13 @@ import gradio as gr
 import numpy as np
 import time
 import logging
-from main import *
-from utils import *
+import os
 
 gptsovits_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(gptsovits_dir)
+
+from main import *
+from utils import *
 
 
 class GptSovits_long(GptSovits):

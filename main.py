@@ -6,8 +6,6 @@ from transformers import AutoTokenizer
 import numpy as np
 import librosa
 import re
-from text import cleaned_text_to_sequence
-from text.chinese2 import g2p, text_normalize
 import time
 import onnxruntime as ort
 import sophon.sail as sail
@@ -15,6 +13,9 @@ import sophon.sail as sail
 gptsovits_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(gptsovits_dir)
 sys.path.append(gptsovits_dir+'/text')
+
+from text import cleaned_text_to_sequence
+from text.chinese2 import g2p, text_normalize
 
 
 splits = {"，", "。", "？", "！", ",", ".", "?", "!", "~", ":", "：", "—", "…", }
