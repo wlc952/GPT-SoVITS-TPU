@@ -11,7 +11,6 @@ sys.path.append(gptsovits_dir)
 from main import *
 from utils import *
 
-
 class GptSovits_long(GptSovits):
     def __init__(self, model_path='models', tokenizer='g2pw_tokenizer'):
         super().__init__(model_path, tokenizer)
@@ -125,7 +124,6 @@ class GptSovits_long(GptSovits):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-
     gptsovits = GptSovits_long(gptsovits_dir + "/models", gptsovits_dir + "/g2pw_tokenizer")
 
     def process_audio(audio, ref_text, target_text, top_k, post_process=True, min_silence_len=200):
