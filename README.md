@@ -9,6 +9,8 @@
 ```bash
 git clone https://github.com/wlc952/GPT-SoVITS-TPU.git
 cd GPT-SoVITS-TPU
+python3 -m venv tts_venv
+source tts_venv.bin/activate
 sudo chmod +x prepare.sh
 ./prepare.sh
 ```
